@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drone Program — Task Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2029;
+    --panel-2: #222a35;
+    --panel-3: #2a3340;
+    --border: #2d3745;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --red: #f85149;
+    --orange: #f0883e;
+    --yellow: #e3b341;
+    --green: #3fb950;
+    --blue: #58a6ff;
+    --accent: #7d8590;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  a { color: var(--blue); }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 22px; margin: 0; font-weight: 600; }
+  .subtitle { color: var(--muted); font-size: 12px; }
+
+  /* Filter bar */
+  .filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .filters input, .filters select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font: inherit;
+    min-width: 140px;
+  }
+  .filters input:focus, .filters select:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+  .filters input[type="search"] { min-width: 220px; }
+  .filters button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .filters button:hover { background: var(--panel-3); }
+  .filters .active-count {
+    color: var(--muted);
+    font-size: 12px;
+    margin-left: auto;
+  }
+
+  .grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: min-content;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; }
+
+  /* KPI cards */
+  .kpi { grid-column: span 3; cursor: pointer; transition: border-color 0.1s; }
+  .kpi:hover { border-color: var(--blue); }
+  .kpi.is-active { border-color: var(--blue); background: var(--panel-2); }
+  .kpi .big {
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 4px 0 6px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .sub { font-size: 12px; color: var(--muted); }
+  .kpi.red   .big { color: var(--red); }
+  .kpi.orange .big { color: var(--orange); }
+  .kpi.yellow .big { color: var(--yellow); }
+  .kpi.gray  .big { color: var(--accent); }
+
+  /* Leaderboard */
+  .leaderboard { grid-column: span 5; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  .bar-row:hover { background: var(--panel-2); }
+  .bar-row.is-active { background: var(--panel-3); }
+  .bar-row .name { font-weight: 500; }
+  .bar-track {
+    background: var(--panel-2);
+    border-radius: 4px;
+    height: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--red);
+    transition: width 0.2s;
+  }
+  .bar-fill.gray { background: var(--accent); }
+  .bar-row .count {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+
+  /* Show status table */
+  .shows { grid-column: span 7; }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.data th, table.data td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.data th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  table.data th:hover { color: var(--text); }
+  table.data th.sorted { color: var(--blue); }
+  table.data th.sorted::after { content: ""; }
+  table.data th.sorted.asc::after { content: " ▲"; font-size: 8px; }
+  table.data th.sorted.desc::after { content: " ▼"; font-size: 8px; }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data tbody tr { cursor: pointer; }
+  table.data tbody tr:hover { background: var(--panel-2); }
+  table.data tbody tr.is-active { background: var(--panel-3); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.show-name { font-weight: 500; }
+  .chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .chip.red    { background: rgba(248,81,73,0.15);  color: var(--red); }
+  .chip.orange { background: rgba(240,136,62,0.15); color: var(--orange); }
+  .chip.yellow { background: rgba(227,179,65,0.15); color: var(--yellow); }
+  .chip.gray   { background: rgba(125,133,144,0.2); color: var(--accent); }
+  .chip.green  { background: rgba(63,185,80,0.15);  color: var(--green); }
+
+  /* Changes panel */
+  .changes { grid-column: span 12; }
+  .changes.is-hidden { display: none; }
+  .changes-empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .change-section {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .change-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+  .change-section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .change-section-head .count {
+    color: var(--muted);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+  }
+  .change-section.newly-past   .change-section-head { color: var(--red); }
+  .change-section.newly-done   .change-section-head { color: var(--green); }
+  .change-section.newly-assigned   .change-section-head { color: var(--blue); }
+  .change-section.newly-unassigned .change-section-head { color: var(--orange); }
+  .change-section.date-moved  .change-section-head { color: var(--yellow); }
+  .change-section.added       .change-section-head { color: var(--accent); }
+  .change-section.removed     .change-section-head { color: var(--accent); }
+  .change-line {
+    display: grid;
+    grid-template-columns: 200px 1fr 220px;
+    gap: 12px;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(45,55,69,0.4);
+  }
+  .change-line:last-child { border-bottom: none; }
+  .change-line .tshow { color: var(--blue); cursor: pointer; }
+  .change-line .tshow:hover { text-decoration: underline; }
+  .change-line .cmeta { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+  .change-line .cmeta .from { text-decoration: line-through; opacity: 0.7; margin-right: 4px; }
+  .change-line .cmeta .to { color: var(--text); }
+
+  /* Detail table */
+  .detail { grid-column: span 12; }
+  .detail-owner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 6px 0;
+    border-bottom: 1px solid var(--border);
+    margin-top: 12px;
+    cursor: pointer;
+  }
+  .detail-owner:first-of-type { margin-top: 0; }
+  .detail-owner .name { font-weight: 600; font-size: 14px; }
+  .detail-owner .meta { color: var(--muted); font-size: 12px; }
+  .detail-owner .caret { color: var(--muted); font-size: 10px; margin-left: auto; }
+  .task-line {
+    display: grid;
+    grid-template-columns: 200px 1fr 110px 90px;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(45,55,69,0.4);
+  }
+  .task-line .tshow { color: var(--blue); cursor: pointer; }
+  .task-line .tshow:hover { text-decoration: underline; }
+  .task-line .tlabel { color: var(--text); }
+  .task-line .tdue { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .task-line .tdue.past { color: var(--red); font-weight: 600; }
+  .task-line .tdue.soon { color: var(--orange); font-weight: 600; }
+  .owner-group.collapsed .task-line { display: none; }
+  .empty {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 20px 0;
+    text-align: center;
+  }
+
+  .footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+  }
+  code { font-family: "Consolas", "Monaco", monospace; font-size: 11px; }
+
+  @media (max-width: 900px) {
+    .kpi { grid-column: span 6; }
+    .leaderboard, .shows { grid-column: span 12; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Drone Program — Task Dashboard</h1>
+    <div class="subtitle" id="header-subtitle">Loading…</div>
+  </div>
+  <div class="subtitle" id="header-meta"></div>
+</header>
+
+<div class="filters">
+  <input type="search" id="f-search" placeholder="Search task or show…">
+  <select id="f-owner"><option value="">All owners</option></select>
+  <select id="f-show"><option value="">All shows</option></select>
+  <select id="f-status">
+    <option value="open">Open (not done)</option>
+    <option value="past">Past due only</option>
+    <option value="week">Due this week</option>
+    <option value="nextweek">Due next week</option>
+    <option value="done">Done only</option>
+    <option value="all">All tasks</option>
+  </select>
+  <button id="f-clear">Clear</button>
+  <button id="f-changes">Show changes</button>
+  <span class="active-count" id="active-count"></span>
+</div>
+
+<div class="grid">
+
+  <div class="panel kpi red" data-status="past">
+    <h2>Past Due</h2>
+    <div class="big" id="kpi-past">—</div>
+    <div class="sub">open tasks past their due date</div>
+  </div>
+  <div class="panel kpi orange" data-status="week">
+    <h2>Due This Week</h2>
+    <div class="big" id="kpi-week">—</div>
+    <div class="sub" id="kpi-week-sub">—</div>
+  </div>
+  <div class="panel kpi yellow" data-status="nextweek">
+    <h2>Due Next Week</h2>
+    <div class="big" id="kpi-nextweek">—</div>
+    <div class="sub" id="kpi-nextweek-sub">—</div>
+  </div>
+  <div class="panel kpi gray" data-owner="__unassigned__">
+    <h2>Unassigned (Open)</h2>
+    <div class="big" id="kpi-unassigned">—</div>
+    <div class="sub" id="kpi-unassigned-sub">—</div>
+  </div>
+
+  <div class="panel leaderboard">
+    <h2>Past-Due Tasks by Owner <span class="hint">click to filter</span></h2>
+    <div id="leaderboard-body"></div>
+  </div>
+
+  <div class="panel shows">
+    <h2>Show Status <span class="hint">click column to sort · click row to filter</span></h2>
+    <table class="data">
+      <thead>
+        <tr>
+          <th data-sort="name">Show</th>
+          <th data-sort="date" class="sorted asc">Date</th>
+          <th class="num" data-sort="done">Done</th>
+          <th class="num" data-sort="pastDue">Past Due</th>
+          <th class="num" data-sort="unassigned">Unassigned</th>
+          <th data-sort="health">Health</th>
+        </tr>
+      </thead>
+      <tbody id="shows-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel changes is-hidden" id="changes-panel">
+    <h2>
+      <span>Changes Since Last Scrub <span class="hint" id="changes-prev-date"></span></span>
+      <span class="hint"><a href="#" id="changes-toggle">hide</a></span>
+    </h2>
+    <div id="changes-body"></div>
+  </div>
+
+  <div class="panel detail">
+    <h2 id="detail-title">Tasks — By Owner <span class="hint">click owner to collapse</span></h2>
+    <div id="detail-body"></div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Rendered from <code>Shows/_scrubs/rollup.xlsx</code> · Source of truth: <code>show-tasks.json</code> per show · Refreshed by <code>scrub.py</code> ·
+  <a href="#" id="export-csv">Export current view to CSV</a>
+</div>
+
+<script id="dashboard-data" type="application/json">
+{
+  "scrubDate": "2026-04-15",
+  "nextRefresh": "2026-04-20",
+  "shows": [
+    { "name": "Cerritos Seminar Demo", "date": "2026-04-25", "total": 34 },
+    { "name": "FOA Warehouse",         "date": "2026-04-25", "total": 34 },
+    { "name": "City of Rocklin",       "date": "2026-05-02", "total": 34 },
+    { "name": "Johnny Morris",         "date": "2026-05-08", "total": 34 },
+    { "name": "LAMC",                  "date": "2026-05-14", "total": 34 },
+    { "name": "Big Cedar",             "date": "2026-07-04", "total": 34 },
+    { "name": "City of Palisades",     "date": "2026-07-04", "total": 34 },
+    { "name": "Compass Church",        "date": "2026-07-04", "total": 34 },
+    { "name": "Rose Bowl",             "date": "2026-07-04", "total": 34 }
+  ],
+  "tasks": [
+    { "show": "FOA Warehouse",         "label": "PIC assigned (Drone Schedule > Pilot)",  "owner": "Bradley", "due": "2026-03-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Designer assigned",                       "owner": "Bradley", "due": "2026-03-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Copilot assigned",                        "owner": "Bradley", "due": "2026-04-04", "done": false },
+    { "show": "FOA Warehouse",         "label": "Drones allocated (which units, which set)","owner": "Bradley","due": "2026-04-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Flight plan drafted",                     "owner": "Bradley", "due": "2026-04-18", "done": false },
+    { "show": "FOA Warehouse",         "label": "Pre-flight safety brief",                 "owner": "Bradley", "due": "2026-04-22", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "PIC assigned (Drone Schedule > Pilot)",   "owner": "Kevin",   "due": "2026-03-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Designer assigned",                       "owner": "Kevin",   "due": "2026-03-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Copilot assigned",                        "owner": "Kevin",   "due": "2026-04-04", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Drones allocated (which units, which set)","owner": "Kevin",  "due": "2026-04-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Flight plan drafted",                     "owner": "Kevin",   "due": "2026-04-18", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Pre-flight safety brief",                 "owner": "Kevin",   "due": "2026-04-22", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Sales lead identified (Drone Schedule > Sales Lead)", "owner": null, "due": "2026-03-06", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Client contact identified",               "owner": null, "due": "2026-03-08", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Client kickoff call (sales + client + PIC)", "owner": null, "due": "2026-03-14", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Scope locked (Drone Schedule > Scope Locked checkbox)", "owner": null, "due": "2026-03-16", "done": false },
+    { "show": "FOA Warehouse",         "label": "Sales lead identified",                    "owner": null, "due": "2026-03-06", "done": false },
+    { "show": "FOA Warehouse",         "label": "Client contact identified",                "owner": null, "due": "2026-03-08", "done": false },
+    { "show": "FOA Warehouse",         "label": "Scope locked",                             "owner": null, "due": "2026-03-16", "done": false },
+    { "show": "City of Rocklin",       "label": "Sales lead identified",                    "owner": null, "due": "2026-03-13", "done": false },
+    { "show": "City of Rocklin",       "label": "Client kickoff call",                      "owner": null, "due": "2026-03-21", "done": false },
+    { "show": "Johnny Morris",         "label": "Client contact identified",                "owner": null, "due": "2026-03-29", "done": false },
+    { "show": "LAMC",                  "label": "Sales lead identified",                    "owner": null, "due": "2026-04-04", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Design review with client", "owner": null, "due": "2026-04-18", "done": false },
+    { "show": "FOA Warehouse",         "label": "Design review with client", "owner": null, "due": "2026-04-18", "done": false },
+    { "show": "City of Rocklin",       "label": "Design review with client", "owner": null, "due": "2026-04-20", "done": false },
+
+    { "show": "Big Cedar",             "label": "Client kickoff call",       "owner": null, "due": "2026-05-15", "done": false },
+    { "show": "Rose Bowl",             "label": "Client kickoff call",       "owner": null, "due": "2026-05-20", "done": false },
+    { "show": "Compass Church",        "label": "Client kickoff call",       "owner": null, "due": "2026-05-22", "done": false },
+    { "show": "City of Palisades",     "label": "Client kickoff call",       "owner": null, "due": "2026-05-25", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-10", "done": true  },
+    { "show": "Cerritos Seminar Demo", "label": "Airspace check filed",      "owner": "Drew", "due": "2026-04-12", "done": true  },
+    { "show": "Cerritos Seminar Demo", "label": "Insurance certificate",     "owner": "Drew", "due": "2026-04-13", "done": true  },
+    { "show": "FOA Warehouse",         "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-10", "done": true  },
+    { "show": "City of Rocklin",       "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-15", "done": true  }
+  ]
+}
+</script>
+
+<script id="dashboard-data-previous" type="application/json">
+{
+  "scrubDate": "2026-04-08",
+  "tasks": [
+    { "show": "FOA Warehouse",         "label": "PIC assigned (Drone Schedule > Pilot)",  "owner": "Bradley", "due": "2026-03-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Designer assigned",                       "owner": "Bradley", "due": "2026-03-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Copilot assigned",                        "owner": null,      "due": "2026-04-04", "done": false },
+    { "show": "FOA Warehouse",         "label": "Drones allocated (which units, which set)","owner": "Bradley","due": "2026-04-11", "done": false },
+    { "show": "FOA Warehouse",         "label": "Flight plan drafted",                     "owner": "Bradley", "due": "2026-04-18", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "PIC assigned (Drone Schedule > Pilot)",   "owner": "Kevin",   "due": "2026-03-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Designer assigned",                       "owner": "Kevin",   "due": "2026-03-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Copilot assigned",                        "owner": "Kevin",   "due": "2026-04-04", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Drones allocated (which units, which set)","owner": "Kevin",  "due": "2026-04-11", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Flight plan drafted",                     "owner": "Kevin",   "due": "2026-04-18", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Sales lead identified (Drone Schedule > Sales Lead)", "owner": null, "due": "2026-03-06", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Client contact identified",               "owner": "Kevin", "due": "2026-03-08", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Client kickoff call (sales + client + PIC)", "owner": null, "due": "2026-03-14", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Scope locked (Drone Schedule > Scope Locked checkbox)", "owner": null, "due": "2026-03-16", "done": false },
+    { "show": "FOA Warehouse",         "label": "Sales lead identified",                    "owner": null, "due": "2026-03-06", "done": false },
+    { "show": "FOA Warehouse",         "label": "Client contact identified",                "owner": null, "due": "2026-03-08", "done": false },
+    { "show": "FOA Warehouse",         "label": "Scope locked",                             "owner": null, "due": "2026-03-16", "done": false },
+    { "show": "City of Rocklin",       "label": "Sales lead identified",                    "owner": null, "due": "2026-03-13", "done": false },
+    { "show": "City of Rocklin",       "label": "Client kickoff call",                      "owner": null, "due": "2026-03-21", "done": false },
+    { "show": "Johnny Morris",         "label": "Client contact identified",                "owner": null, "due": "2026-03-29", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Design review with client", "owner": null, "due": "2026-04-25", "done": false },
+    { "show": "FOA Warehouse",         "label": "Design review with client", "owner": null, "due": "2026-04-25", "done": false },
+
+    { "show": "Big Cedar",             "label": "Client kickoff call",       "owner": null, "due": "2026-05-15", "done": false },
+    { "show": "Rose Bowl",             "label": "Client kickoff call",       "owner": null, "due": "2026-05-20", "done": false },
+
+    { "show": "Cerritos Seminar Demo", "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-10", "done": false },
+    { "show": "Cerritos Seminar Demo", "label": "Airspace check filed",      "owner": "Drew", "due": "2026-04-12", "done": true  },
+    { "show": "Cerritos Seminar Demo", "label": "Insurance certificate",     "owner": "Drew", "due": "2026-04-13", "done": false },
+    { "show": "FOA Warehouse",         "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-10", "done": false },
+    { "show": "City of Rocklin",       "label": "Site survey complete",      "owner": "Drew", "due": "2026-04-15", "done": false },
+
+    { "show": "LAMC",                  "label": "Old cancelled subtask",     "owner": null, "due": "2026-04-01", "done": false }
+  ]
+}
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  // --- Load data ---
+  const DATA = JSON.parse(document.getElementById("dashboard-data").textContent);
+  const PREV = (function(){
+    const el = document.getElementById("dashboard-data-previous");
+    if (!el) return null;
+    try {
+      const p = JSON.parse(el.textContent);
+      if (!p || !p.scrubDate || !Array.isArray(p.tasks)) return null;
+      return p;
+    } catch (e) { return null; }
+  })();
+  const TODAY = new Date(DATA.scrubDate + "T00:00:00");
+
+  // Derive week windows from scrub date
+  const dayMs = 86400000;
+  const weekEnd = new Date(TODAY.getTime() + 7 * dayMs);
+  const nextWeekStart = weekEnd;
+  const nextWeekEnd = new Date(TODAY.getTime() + 14 * dayMs);
+
+  function parseDate(s){ return new Date(s + "T00:00:00"); }
+  function fmt(d){
+    return d.getFullYear() + "-" +
+      String(d.getMonth()+1).padStart(2,"0") + "-" +
+      String(d.getDate()).padStart(2,"0");
+  }
+  function daysBetween(a, b){
+    return Math.round((b.getTime() - a.getTime()) / dayMs);
+  }
+
+  // Enrich tasks with computed fields
+  DATA.tasks.forEach(t => {
+    t._due = parseDate(t.due);
+    t._daysFromToday = daysBetween(TODAY, t._due);
+    t._ownerKey = t.owner || "__unassigned__";
+    t._ownerLabel = t.owner || "Unassigned";
+    t._pastDue = !t.done && t._due < TODAY;
+    t._dueThisWeek = !t.done && t._due >= TODAY && t._due < weekEnd;
+    t._dueNextWeek = !t.done && t._due >= nextWeekStart && t._due < nextWeekEnd;
+  });
+
+  // Build per-show rollups
+  const showMap = {};
+  DATA.shows.forEach(s => {
+    showMap[s.name] = {
+      name: s.name,
+      date: s.date,
+      _date: parseDate(s.date),
+      total: s.total,
+      done: 0,
+      pastDue: 0,
+      unassigned: 0,
+      tasks: []
+    };
+  });
+  DATA.tasks.forEach(t => {
+    const s = showMap[t.show];
+    if (!s) return;
+    s.tasks.push(t);
+    if (t.done) s.done++;
+    if (t._pastDue) s.pastDue++;
+    if (!t.owner && !t.done) s.unassigned++;
+  });
+  function healthOf(s){
+    if (s.pastDue >= 15) return { label: "Critical", cls: "red", rank: 4 };
+    if (s.pastDue >= 8)  return { label: "Behind",   cls: "orange", rank: 3 };
+    if (s.pastDue >= 1)  return { label: "Watch",    cls: "yellow", rank: 2 };
+    return { label: "On track", cls: "yellow", rank: 1 };
+  }
+  Object.values(showMap).forEach(s => { s._health = healthOf(s); });
+
+  // --- State ---
+  const state = {
+    search: "",
+    owner: "",
+    show: "",
+    status: "open",
+    sortKey: "date",
+    sortDir: "asc",
+    collapsedOwners: new Set(),
+    showChanges: false
+  };
+
+  // Read state from URL hash
+  function readHash(){
+    const h = location.hash.slice(1);
+    if (!h) return;
+    h.split("&").forEach(pair => {
+      const [k,v] = pair.split("=");
+      if (!k) return;
+      const val = decodeURIComponent(v || "");
+      if (k === "changes"){ state.showChanges = val === "1"; return; }
+      if (k in state && typeof state[k] === "string") state[k] = val;
+    });
+  }
+  function writeHash(){
+    const parts = [];
+    ["search","owner","show","status"].forEach(k => {
+      if (state[k]) parts.push(k + "=" + encodeURIComponent(state[k]));
+    });
+    if (state.showChanges) parts.push("changes=1");
+    const h = parts.join("&");
+    history.replaceState(null, "", h ? "#" + h : location.pathname);
+  }
+
+  // --- Filtering ---
+  function matchesFilter(t){
+    if (state.owner && t._ownerKey !== state.owner) return false;
+    if (state.show && t.show !== state.show) return false;
+    if (state.search){
+      const q = state.search.toLowerCase();
+      if (!(t.label.toLowerCase().includes(q) || t.show.toLowerCase().includes(q) || t._ownerLabel.toLowerCase().includes(q))) return false;
+    }
+    switch (state.status){
+      case "open":     return !t.done;
+      case "past":     return t._pastDue;
+      case "week":     return t._dueThisWeek;
+      case "nextweek": return t._dueNextWeek;
+      case "done":     return t.done;
+      case "all":      return true;
+    }
+    return true;
+  }
+
+  // --- Rendering ---
+  const $ = id => document.getElementById(id);
+
+  function renderHeader(){
+    $("header-subtitle").textContent =
+      DATA.shows.length + " shows · " + DATA.tasks.length + " tasks tracked";
+    $("header-meta").textContent =
+      "Scrub " + DATA.scrubDate + " · next refresh " + DATA.nextRefresh;
+  }
+
+  function renderKPIs(){
+    const open = DATA.tasks.filter(t => !t.done);
+    $("kpi-past").textContent = open.filter(t => t._pastDue).length;
+    $("kpi-week").textContent = open.filter(t => t._dueThisWeek).length;
+    $("kpi-week-sub").textContent = "through " + fmt(new Date(weekEnd.getTime() - dayMs));
+    $("kpi-nextweek").textContent = open.filter(t => t._dueNextWeek).length;
+    $("kpi-nextweek-sub").textContent = fmt(nextWeekStart) + " – " + fmt(new Date(nextWeekEnd.getTime() - dayMs));
+    const un = open.filter(t => !t.owner).length;
+    $("kpi-unassigned").textContent = un;
+    $("kpi-unassigned-sub").textContent = open.length
+      ? Math.round(100 * un / open.length) + "% of open work"
+      : "no open work";
+
+    // Active highlight
+    document.querySelectorAll(".kpi").forEach(el => {
+      const isStatusMatch = el.dataset.status && el.dataset.status === state.status;
+      const isOwnerMatch  = el.dataset.owner  && el.dataset.owner  === state.owner;
+      el.classList.toggle("is-active", Boolean(isStatusMatch || isOwnerMatch));
+    });
+  }
+
+  function renderLeaderboard(){
+    const counts = {};
+    DATA.tasks.forEach(t => {
+      if (!t._pastDue) return;
+      counts[t._ownerKey] = (counts[t._ownerKey] || 0) + 1;
+    });
+    const allOwners = new Set(DATA.tasks.map(t => t._ownerKey));
+    const rows = Array.from(allOwners).map(k => ({
+      key: k,
+      label: k === "__unassigned__" ? "Unassigned" : k,
+      count: counts[k] || 0
+    })).sort((a,b) => b.count - a.count);
+
+    const max = Math.max(1, ...rows.map(r => r.count));
+    const body = $("leaderboard-body");
+    body.innerHTML = "";
+    rows.forEach(r => {
+      const pct = Math.round(100 * r.count / max);
+      const div = document.createElement("div");
+      div.className = "bar-row" + (state.owner === r.key ? " is-active" : "");
+      div.innerHTML =
+        '<div class="name">' + escapeHtml(r.label) + '</div>' +
+        '<div class="bar-track"><div class="bar-fill ' +
+          (r.key === "__unassigned__" ? "gray" : "") +
+          '" style="width:' + pct + '%"></div></div>' +
+        '<div class="count">' + (r.count || "—") + '</div>';
+      div.addEventListener("click", () => {
+        state.owner = state.owner === r.key ? "" : r.key;
+        syncControls(); rerender();
+      });
+      body.appendChild(div);
+    });
+  }
+
+  function renderShows(){
+    const rows = Object.values(showMap).slice();
+    const dir = state.sortDir === "asc" ? 1 : -1;
+    rows.sort((a,b) => {
+      let av, bv;
+      switch (state.sortKey){
+        case "name":       av = a.name; bv = b.name; break;
+        case "date":       av = a._date; bv = b._date; break;
+        case "done":       av = a.done; bv = b.done; break;
+        case "pastDue":    av = a.pastDue; bv = b.pastDue; break;
+        case "unassigned": av = a.unassigned; bv = b.unassigned; break;
+        case "health":     av = a._health.rank; bv = b._health.rank; break;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return  1 * dir;
+      return 0;
+    });
+
+    const body = $("shows-body");
+    body.innerHTML = "";
+    rows.forEach(s => {
+      const tr = document.createElement("tr");
+      if (state.show === s.name) tr.classList.add("is-active");
+      tr.innerHTML =
+        '<td class="show-name">' + escapeHtml(s.name) + '</td>' +
+        '<td>' + s.date + '</td>' +
+        '<td class="num">' + s.done + '/' + s.total + '</td>' +
+        '<td class="num">' + s.pastDue + '</td>' +
+        '<td class="num">' + s.unassigned + '</td>' +
+        '<td><span class="chip ' + s._health.cls + '">' + s._health.label + '</span></td>';
+      tr.addEventListener("click", () => {
+        state.show = state.show === s.name ? "" : s.name;
+        syncControls(); rerender();
+      });
+      body.appendChild(tr);
+    });
+
+    document.querySelectorAll("table.data th[data-sort]").forEach(th => {
+      th.classList.remove("sorted","asc","desc");
+      if (th.dataset.sort === state.sortKey){
+        th.classList.add("sorted", state.sortDir);
+      }
+    });
+  }
+
+  function renderDetail(){
+    const matched = DATA.tasks.filter(matchesFilter);
+    const body = $("detail-body");
+    body.innerHTML = "";
+
+    $("active-count").textContent = matched.length + " tasks match";
+
+    if (!matched.length){
+      body.innerHTML = '<div class="empty">No tasks match the current filters.</div>';
+      return;
+    }
+
+    // Group by owner
+    const groups = {};
+    matched.forEach(t => {
+      if (!groups[t._ownerKey]) groups[t._ownerKey] = { label: t._ownerLabel, tasks: [] };
+      groups[t._ownerKey].tasks.push(t);
+    });
+
+    // Sort owners: unassigned last, others by count desc
+    const keys = Object.keys(groups).sort((a,b) => {
+      if (a === "__unassigned__") return 1;
+      if (b === "__unassigned__") return -1;
+      return groups[b].tasks.length - groups[a].tasks.length;
+    });
+
+    keys.forEach(k => {
+      const g = groups[k];
+      g.tasks.sort((a,b) => a._daysFromToday - b._daysFromToday);
+      const pastCount = g.tasks.filter(t => t._pastDue).length;
+      const weekCount = g.tasks.filter(t => t._dueThisWeek).length;
+
+      const wrap = document.createElement("div");
+      wrap.className = "owner-group" + (state.collapsedOwners.has(k) ? " collapsed" : "");
+
+      const header = document.createElement("div");
+      header.className = "detail-owner";
+      const metaBits = [g.tasks.length + " shown"];
+      if (pastCount) metaBits.push(pastCount + " past due");
+      if (weekCount) metaBits.push(weekCount + " this week");
+      header.innerHTML =
+        '<div class="name">' + escapeHtml(g.label) + '</div>' +
+        '<div class="meta">· ' + metaBits.join(" · ") + '</div>' +
+        '<div class="caret">' + (state.collapsedOwners.has(k) ? "▶" : "▼") + '</div>';
+      header.addEventListener("click", () => {
+        if (state.collapsedOwners.has(k)) state.collapsedOwners.delete(k);
+        else state.collapsedOwners.add(k);
+        renderDetail();
+      });
+      wrap.appendChild(header);
+
+      g.tasks.forEach(t => {
+        const line = document.createElement("div");
+        line.className = "task-line";
+        let dueClass = "", dueLabel = "";
+        if (t.done){
+          dueLabel = "done";
+        } else if (t._pastDue){
+          dueClass = "past";
+          dueLabel = (-t._daysFromToday) + "d late";
+        } else if (t._dueThisWeek){
+          dueClass = "soon";
+          dueLabel = "in " + t._daysFromToday + "d";
+        } else {
+          dueLabel = "in " + t._daysFromToday + "d";
+        }
+        line.innerHTML =
+          '<div class="tshow" data-show="' + escapeHtml(t.show) + '">' + escapeHtml(t.show) + '</div>' +
+          '<div class="tlabel">' + escapeHtml(t.label) + '</div>' +
+          '<div class="tdue ' + dueClass + '">' + t.due + '</div>' +
+          '<div class="tdue ' + dueClass + '">' + dueLabel + '</div>';
+        line.querySelector(".tshow").addEventListener("click", (e) => {
+          e.stopPropagation();
+          state.show = t.show;
+          syncControls(); rerender();
+        });
+        wrap.appendChild(line);
+      });
+
+      body.appendChild(wrap);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  // --- Diff computation ---
+  function taskKey(t){ return t.show + "||" + t.label; }
+
+  const DIFF = (function(){
+    if (!PREV) return null;
+    const prevDate = new Date(PREV.scrubDate + "T00:00:00");
+    const prevMap = {};
+    PREV.tasks.forEach(t => { prevMap[taskKey(t)] = t; });
+    const currMap = {};
+    DATA.tasks.forEach(t => { currMap[taskKey(t)] = t; });
+
+    const newlyPast = [];      // was not past due, is now past due
+    const newlyDone = [];      // done went false -> true
+    const newlyAssigned = [];  // owner null -> value
+    const newlyUnassigned = [];// owner value -> null
+    const dateMoved = [];      // due date changed
+    const added = [];          // in curr, not in prev
+    const removed = [];        // in prev, not in curr
+
+    DATA.tasks.forEach(curr => {
+      const k = taskKey(curr);
+      const prev = prevMap[k];
+      if (!prev){
+        added.push({ task: curr });
+        return;
+      }
+      // Newly past due: prev due was not past (relative to prev scrub date), curr is past (relative to curr scrub date)
+      const prevDue = new Date(prev.due + "T00:00:00");
+      const wasPast = !prev.done && prevDue < prevDate;
+      if (!wasPast && curr._pastDue){
+        newlyPast.push({ task: curr, prev: prev });
+      }
+      // Newly done
+      if (!prev.done && curr.done){
+        newlyDone.push({ task: curr, prev: prev });
+      }
+      // Owner changes
+      const prevOwner = prev.owner || null;
+      const currOwner = curr.owner || null;
+      if (prevOwner !== currOwner){
+        if (!prevOwner && currOwner) newlyAssigned.push({ task: curr, prev: prev });
+        else if (prevOwner && !currOwner) newlyUnassigned.push({ task: curr, prev: prev });
+      }
+      // Due date moved
+      if (prev.due !== curr.due){
+        dateMoved.push({ task: curr, prev: prev });
+      }
+    });
+
+    PREV.tasks.forEach(prev => {
+      const k = taskKey(prev);
+      if (!currMap[k]) removed.push({ task: prev });
+    });
+
+    const total = newlyPast.length + newlyDone.length + newlyAssigned.length +
+                  newlyUnassigned.length + dateMoved.length + added.length + removed.length;
+
+    return {
+      prevDate: PREV.scrubDate,
+      total,
+      sections: [
+        { key: "newly-past",       title: "Newly past due",    items: newlyPast },
+        { key: "newly-done",       title: "Newly done",        items: newlyDone },
+        { key: "newly-assigned",   title: "Newly assigned",    items: newlyAssigned },
+        { key: "newly-unassigned", title: "Lost owner",        items: newlyUnassigned },
+        { key: "date-moved",       title: "Due date changed",  items: dateMoved },
+        { key: "added",            title: "Added",             items: added },
+        { key: "removed",          title: "Removed",           items: removed }
+      ]
+    };
+  })();
+
+  function renderChanges(){
+    const panel = $("changes-panel");
+    const btn = $("f-changes");
+    if (!DIFF){
+      panel.classList.add("is-hidden");
+      btn.style.display = "none";
+      return;
+    }
+    btn.style.display = "";
+    btn.textContent = state.showChanges
+      ? "Hide changes"
+      : "Show changes (" + DIFF.total + ")";
+    if (!state.showChanges){
+      panel.classList.add("is-hidden");
+      return;
+    }
+    panel.classList.remove("is-hidden");
+
+    $("changes-prev-date").textContent = "vs. " + DIFF.prevDate;
+    const body = $("changes-body");
+    body.innerHTML = "";
+
+    if (DIFF.total === 0){
+      body.innerHTML = '<div class="changes-empty">No changes since the last scrub.</div>';
+      return;
+    }
+
+    DIFF.sections.forEach(section => {
+      if (!section.items.length) return;
+      const wrap = document.createElement("div");
+      wrap.className = "change-section " + section.key;
+      const head = document.createElement("div");
+      head.className = "change-section-head";
+      head.innerHTML = escapeHtml(section.title) +
+        ' <span class="count">· ' + section.items.length + '</span>';
+      wrap.appendChild(head);
+
+      section.items.forEach(entry => {
+        const t = entry.task;
+        const prev = entry.prev;
+        let metaHtml = "";
+        switch (section.key){
+          case "newly-past":
+            metaHtml = '<span class="to">' + (-t._daysFromToday) + 'd late</span>';
+            break;
+          case "newly-done":
+            metaHtml = '<span class="to">completed</span>';
+            break;
+          case "newly-assigned":
+            metaHtml = '<span class="from">unassigned</span> → <span class="to">' + escapeHtml(t.owner) + '</span>';
+            break;
+          case "newly-unassigned":
+            metaHtml = '<span class="from">' + escapeHtml(prev.owner) + '</span> → <span class="to">unassigned</span>';
+            break;
+          case "date-moved":
+            metaHtml = '<span class="from">' + prev.due + '</span> → <span class="to">' + t.due + '</span>';
+            break;
+          case "added":
+            metaHtml = '<span class="to">new task · due ' + t.due + '</span>';
+            break;
+          case "removed":
+            metaHtml = '<span class="from">was due ' + t.due + '</span>';
+            break;
+        }
+        const line = document.createElement("div");
+        line.className = "change-line";
+        line.innerHTML =
+          '<div class="tshow" data-show="' + escapeHtml(t.show) + '">' + escapeHtml(t.show) + '</div>' +
+          '<div class="tlabel">' + escapeHtml(t.label) + '</div>' +
+          '<div class="cmeta">' + metaHtml + '</div>';
+        line.querySelector(".tshow").addEventListener("click", () => {
+          state.show = t.show;
+          syncControls(); rerender();
+        });
+        wrap.appendChild(line);
+      });
+      body.appendChild(wrap);
+    });
+  }
+
+  function rerender(){
+    renderKPIs();
+    renderLeaderboard();
+    renderShows();
+    renderDetail();
+    renderChanges();
+    writeHash();
+  }
+
+  // Populate filter dropdowns
+  function populateFilters(){
+    const owners = Array.from(new Set(DATA.tasks.map(t => t._ownerKey)))
+      .sort((a,b) => {
+        if (a === "__unassigned__") return 1;
+        if (b === "__unassigned__") return -1;
+        return a.localeCompare(b);
+      });
+    const ownerSel = $("f-owner");
+    owners.forEach(k => {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k === "__unassigned__" ? "Unassigned" : k;
+      ownerSel.appendChild(opt);
+    });
+    const showSel = $("f-show");
+    DATA.shows.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.name;
+      opt.textContent = s.name;
+      showSel.appendChild(opt);
+    });
+  }
+
+  function syncControls(){
+    $("f-search").value = state.search;
+    $("f-owner").value = state.owner;
+    $("f-show").value = state.show;
+    $("f-status").value = state.status;
+  }
+
+  function wireEvents(){
+    $("f-search").addEventListener("input", e => { state.search = e.target.value; rerender(); });
+    $("f-owner").addEventListener("change", e => { state.owner = e.target.value; rerender(); });
+    $("f-show").addEventListener("change", e => { state.show = e.target.value; rerender(); });
+    $("f-status").addEventListener("change", e => { state.status = e.target.value; rerender(); });
+    $("f-clear").addEventListener("click", () => {
+      state.search = ""; state.owner = ""; state.show = ""; state.status = "open";
+      syncControls(); rerender();
+    });
+    $("f-changes").addEventListener("click", () => {
+      state.showChanges = !state.showChanges;
+      rerender();
+    });
+    $("changes-toggle").addEventListener("click", e => {
+      e.preventDefault();
+      state.showChanges = false;
+      rerender();
+    });
+
+    document.querySelectorAll(".kpi").forEach(el => {
+      el.addEventListener("click", () => {
+        if (el.dataset.status){
+          state.status = state.status === el.dataset.status ? "open" : el.dataset.status;
+        }
+        if (el.dataset.owner){
+          state.owner = state.owner === el.dataset.owner ? "" : el.dataset.owner;
+        }
+        syncControls(); rerender();
+      });
+    });
+
+    document.querySelectorAll("table.data th[data-sort]").forEach(th => {
+      th.addEventListener("click", () => {
+        const k = th.dataset.sort;
+        if (state.sortKey === k){
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortKey = k;
+          state.sortDir = "asc";
+        }
+        renderShows();
+      });
+    });
+
+    $("export-csv").addEventListener("click", e => {
+      e.preventDefault();
+      exportCsv();
+    });
+  }
+
+  function exportCsv(){
+    const matched = DATA.tasks.filter(matchesFilter);
+    const rows = [["Show","Task","Owner","Due","Status"]];
+    matched.forEach(t => {
+      let status = "open";
+      if (t.done) status = "done";
+      else if (t._pastDue) status = "past due";
+      else if (t._dueThisWeek) status = "due this week";
+      rows.push([t.show, t.label, t._ownerLabel, t.due, status]);
+    });
+    const csv = rows.map(r => r.map(cell => {
+      const s = String(cell).replace(/"/g,'""');
+      return /[",\n]/.test(s) ? '"' + s + '"' : s;
+    }).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "drone-tasks-" + DATA.scrubDate + ".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // --- Init ---
+  readHash();
+  renderHeader();
+  populateFilters();
+  syncControls();
+  wireEvents();
+  rerender();
+})();
+</script>
+
+</body>
+</html>
